@@ -18,8 +18,8 @@ s1.discard(1)
 # remove and return arbitrary element
 s1.pop()
 
-# remove all items
 s1.clear()
+s1.copy()
 
 '''
 Set operations.

@@ -1,4 +1,5 @@
 import copy
+import sys
 
 # actions
 P1 = 'P1'
@@ -499,8 +500,12 @@ if __name__ == '__main__':
     hung_trees = []
     blue_flowers = {}
 
-    f_name = './inputBig1.txt'
-    with open(f_name) as f:
+    args = sys.argv
+    if (not len(args) > 1):
+        print('Input file required')
+        sys.exit(1)
+    source = args[1]
+    with open(source) as f:
         striped = [line.rstrip() for line in f]
         for index, line in enumerate(striped):
             splited = [int(i) for i in line.split(' ')]
@@ -531,8 +536,6 @@ if __name__ == '__main__':
                                                       barbels)
 
         add_charge(flowers, vertex_barbels, eps, hung_trees)
-
-        # print(min_edge, eps, opt['action'])
 
         if (opt['action'] == P1):
             tree = opt['t']  # tree of current bubble
@@ -579,7 +582,7 @@ if __name__ == '__main__':
                             if (p in d_path):
                                 comp_path.remove(p)
 
-                    if (len(path) > 1):
+                    if (len(path) > 1 and comp_path):
                         comp_path.pop()
 
                     # if complementary path was created in wrong direction
@@ -640,6 +643,7 @@ if __name__ == '__main__':
             v1 = opt['v1']  # first vertex of last edge in cycle
             v2 = opt['v2']  # second vertex of last edge in cycle
             t = opt['t']  # tree in which cycle happened
+
             path1 = []  # path from root to v1
             path2 = []  # path from root to v2
             get_path(t.root, v1, path1, {})  # fill path1
@@ -770,11 +774,6 @@ if __name__ == '__main__':
         else:
             no_solution = True
             break
-
-        # print('barbels', barbels)
-        # print('matching', matching)
-        # print('blocking edges', blocking_edges)
-        # print('hung tress count', len(hung_trees))
 
     if (no_solution):
         print('No solution')

@@ -7,6 +7,12 @@ P3 = 'P3'
 P4 = 'P4'
 
 
+class HungTree:
+
+    def __init__(self, elements):
+        self.root = elements[0]
+
+
 class Flower:
 
     def __init__(self, flowers, stem, charge, color, vertex=None):
@@ -63,20 +69,11 @@ class Flower:
         return blue_flowers
 
 
-class HungTree:
-
-    def __init__(self, elements):
-        self.root = elements[0]
-
-
-def get_flower(flowers, item):
+def get_flower(blue_flowers, item):
     '''
     Retrieve blue flower based on vertex id.
-    Later try store blue flowers in dict.
     '''
-    for f in flowers:
-        if (f.color == 'blue' and f.vertex == item):
-            return f
+    return blue_flowers[item]
 
 
 def add_charge_to_tree(node, eps, position, visited):
@@ -189,7 +186,7 @@ def find_min_green(node, prev, previous, level, min_charge, bubble, visited):
 
 
 def get_min_edge_and_epsilon(edges, flowers, matching, vertex_barbels,
-                             blocking_edges, hung_trees):
+                             blocking_edges, hung_trees, barbels):
     min_e = float('inf')
     min_edge = None
     opt = {'action': None}  # action and other fields goes here
@@ -232,11 +229,56 @@ def get_min_edge_and_epsilon(edges, flowers, matching, vertex_barbels,
                 tree = t
                 final_bubble = bubble[0]
                 final_prev = previous[0]
-        if (min_green < min_e):
+        if (min_green < min_e and min_green >= 0):
             min_e = min_green
             min_edge = edge
             opt = {'action': P1, 't': tree, 'bubble': final_bubble,
                    'prev': final_prev}
+
+        # P2 Tree and barbel
+        if (not chosen):
+            tree_flower = None
+            barbel_flower = None  # barbel node to connect
+            barbel = None  # barbel tuple
+            barbel_vertex = None
+            tree = None
+            p2 = True
+
+            # find flower in tree
+            for t in hung_trees:
+                v1 = get_outer_flower(t.root, u, {})
+                v2 = get_outer_flower(t.root, v, {})
+
+                if (v1 or v2):
+                    tree = t
+                    if (tree_flower):
+                        p2 = False
+                    if (v1):
+                        tree_flower = v1
+                        barbel_vertex = v
+                    else:
+                        tree_flower = v2
+                        barbel_vertex = u
+                if (v1 and v2):
+                    p2 = False
+
+            if (tree_flower and p2 and is_even(tree.root, tree_flower, 0, {})):
+                # find posible barbel flower
+                barbel_flower = get_flower(blue_flowers, barbel_vertex)
+                if (not barbel_flower.is_outer):
+                    barbel_flower = barbel_flower.outer
+
+                # check if really is in some barbel
+                for b in barbels:
+                    if (b[0] is barbel_flower):
+                        barbel = b
+                    elif (b[1] is barbel_flower):
+                        barbel = b
+                if (barbel and e < min_e and e >= 0):
+                    min_e = e
+                    chosen = True
+                    min_edge = edge
+                    opt = {'action': P2, 'barbel': barbel}
 
         # P3 flowers in same tree
         if (not chosen):
@@ -248,7 +290,7 @@ def get_min_edge_and_epsilon(edges, flowers, matching, vertex_barbels,
                     even2 = is_even(t.root, v2, 0, {})
                     if (even1 and even2):
                         chosen = True
-                        if ((e / 2) < min_e):
+                        if ((e / 2) < min_e and (e / 2) >= 0):
                             chosen = True
                             min_e = e / 2
                             min_edge = edge
@@ -276,52 +318,13 @@ def get_min_edge_and_epsilon(edges, flowers, matching, vertex_barbels,
                     even2 = is_even(t2.root, v2, 0, {})
                     if (even1 and even2):
                         chosen = True
-                        if ((e / 2) < min_e):
+                        if ((e / 2) < min_e and (e / 2) >= 0):
                             chosen = True
                             min_e = e / 2
                             min_edge = edge
                             opt = {'action': P4, 'v1': v1, 'v2': v2, 't1': t1,
                                    't2': t2}
                             break
-
-        # P2 Tree and barbel
-        if (not chosen):
-            tree_flower = None
-            barbel_flower = None  # barbel node to connect
-            barbel = None  # barbel tuple
-            barbel_vertex = None
-            tree = None
-
-            # find flower in tree
-            for t in hung_trees:
-                v1 = get_outer_flower(t.root, u, {})
-                v2 = get_outer_flower(t.root, v, {})
-
-                if (v1 or v2):
-                    tree = t
-                    if (v1):
-                        tree_flower = v1
-                        barbel_vertex = v
-                    else:
-                        tree_flower = v2
-                        barbel_vertex = u
-
-            if (tree_flower and is_even(tree.root, tree_flower, 0, {})):
-                # find posible barbel flower
-                barbel_flower = get_flower(flowers, barbel_vertex)
-                if (not barbel_flower.is_outer):
-                    barbel_flower = barbel_flower.outer
-
-                # check if really is in some barbel
-                for b in matching:
-                    if (b[0] is barbel_flower):
-                        barbel = b
-                    elif (b[1] is barbel_flower):
-                        barbel = b
-                if (barbel and e < min_e):
-                    min_e = e
-                    min_edge = edge
-                    opt = {'action': P2, 'barbel': barbel}
 
     return (min_edge, min_e, opt)
 
@@ -348,12 +351,10 @@ def get_full_inner_path(current, to, children, nodes, visited):
     visited[current] = 1
     nodes.append(current)
     if (current is to and len(nodes) > 1):
-        if (len(nodes) > 1):
-            nodes.pop()
         return nodes
     for n in current.get_next():
         if (n in children and (n not in visited or
-                               (len(nodes) >= 2 and
+                               (len(nodes) >= 3 and
                                 n is to))):
             res = get_full_inner_path(n, to, children, nodes, visited)
             if (res):
@@ -388,6 +389,66 @@ def get_alt_path(current, to, nodes, seen, level, matching, blocking_edges):
             if (res):
                 return res
     nodes.pop()
+
+
+def in_alt_path(node, alt_path):
+    stack = copy.copy(node.flowers)
+    # blue flower
+    if (not stack):
+        if (node in alt_path):
+            return True
+    else:
+        while(len(stack)):
+            last = stack.pop()
+            if (last.color == 'green'):
+                stack += last.flowers
+            if (last.color == 'blue' and last in alt_path):
+                return True
+    return False
+
+
+def split_tree_to_barbels(node, alt_path, level, barbels,
+                          prev, visited, blocking_edges):
+    visited[node] = 1
+    if (level % 2 == 1):
+        if (in_alt_path(node, alt_path)):
+            barbels[(node, prev)] = 1
+            barbels[(prev, node)] = 1
+            # change stems
+            b1, b2 = get_connection(node, prev)
+            set_new_stems(node, b1)
+            set_new_stems(prev, b2)
+        else:
+            b1, b2 = get_connection(node, prev)
+            b1.next.remove(b2)
+            b2.next.remove(b1)
+
+            blocking_edges.pop(
+                (b1.vertex, b2.vertex), None)
+            blocking_edges.pop(
+                (b2.vertex, b1.vertex), None)
+    elif (level % 2 == 0 and prev is not None):
+        if (not in_alt_path(node, alt_path)):
+            barbels[(node, prev)] = 1
+            barbels[(prev, node)] = 1
+            # change stems
+            b1, b2 = get_connection(node, prev)
+            set_new_stems(node, b1)
+            set_new_stems(prev, b2)
+        else:
+            b1, b2 = get_connection(node, prev)
+            b1.next.remove(b2)
+            b2.next.remove(b1)
+
+            blocking_edges.pop(
+                (b1.vertex, b2.vertex), None)
+            blocking_edges.pop(
+                (b2.vertex, b1.vertex), None)
+    for n in node.get_next():
+        if (n not in visited):
+            split_tree_to_barbels(
+                n, alt_path, level + 1, barbels, node,
+                visited, blocking_edges)
 
 
 def all_next_visited(blue_flower, visited):
@@ -428,15 +489,17 @@ if __name__ == '__main__':
     n_edges = 0
     no_solution = False
 
-    matching = {}  # barbels edges
+    matching = {}
     vertex_barbels = {}
     blocking_edges = {}
+    barbels = {}
     vertices = {}
     flowers = []
     edges = {}
     hung_trees = []
+    blue_flowers = {}
 
-    f_name = './input3.txt'
+    f_name = './inputBig1.txt'
     with open(f_name) as f:
         striped = [line.rstrip() for line in f]
         for index, line in enumerate(striped):
@@ -455,21 +518,21 @@ if __name__ == '__main__':
     for v in vertices.keys():
         f = Flower(None, None, 0, 'blue', v)
         flowers.append(f)
+        blue_flowers[v] = f
         t = HungTree([f])
         hung_trees.append(t)
 
-    max_iter = 50
-    i = 0
     while (not is_complete(vertices, vertex_barbels)):
         min_edge, eps, opt = get_min_edge_and_epsilon(edges, flowers,
                                                       matching,
                                                       vertex_barbels,
                                                       blocking_edges,
-                                                      hung_trees)
-
-        # print('min_edge', min_edge, eps, opt['action'])
+                                                      hung_trees,
+                                                      barbels)
 
         add_charge(flowers, vertex_barbels, eps, hung_trees)
+
+        # print(min_edge, eps, opt['action'])
 
         if (opt['action'] == P1):
             tree = opt['t']  # tree of current bubble
@@ -516,9 +579,12 @@ if __name__ == '__main__':
                             if (p in d_path):
                                 comp_path.remove(p)
 
+                    if (len(path) > 1):
+                        comp_path.pop()
+
                     # if complementary path was created in wrong direction
                     # need reverse action
-                    if (comp_path[1] is f):
+                    if (comp_path[1] is f and len(comp_path) > 2):
                         temp = comp_path[1:]
                         temp.reverse()
                         comp_path = [comp_path[0]] + temp
@@ -543,16 +609,13 @@ if __name__ == '__main__':
                                 b1, b2 = get_connection(v1, v2)
                                 b1.next.remove(b2)
                                 b2.next.remove(b1)
-                                matching[(v1, v2)] = 1
-                                matching[(v2, v1)] = 1
+                                barbels[(v1, v2)] = 1
+                                barbels[(v2, v1)] = 1
 
-                                # for first and last one remove blocking edge
-                                if (index == 1 or
-                                        index == len(barbels_path) - 1):
-                                    blocking_edges.pop(
-                                        (b1.vertex, b2.vertex), None)
-                                    blocking_edges.pop(
-                                        (b2.vertex, b1.vertex), None)
+                                blocking_edges.pop(
+                                    (b1.vertex, b2.vertex), None)
+                                blocking_edges.pop(
+                                    (b2.vertex, b1.vertex), None)
                     break
 
         elif (opt['action'] == P2):
@@ -560,15 +623,15 @@ if __name__ == '__main__':
             barbel = opt['barbel']  # tuple of flowers
 
             # remove flowers from barbels
-            matching.pop(barbel, None)
-            matching.pop(tuple(reversed(barbel)), None)
+            barbels.pop(barbel, None)
+            barbels.pop(tuple(reversed(barbel)), None)
 
             blocking_edges[(u, v)] = 1
             blocking_edges[(v, u)] = 1
 
             # connect blue flowers
-            b1 = get_flower(flowers, u)
-            b2 = get_flower(flowers, v)
+            b1 = get_flower(blue_flowers, u)
+            b2 = get_flower(blue_flowers, v)
             b1.next.append(b2)
             b2.next.append(b1)
 
@@ -600,15 +663,15 @@ if __name__ == '__main__':
             get_path(lca, v1, path1, {})
             get_path(lca, v2, path2, {})
 
-            u_b = get_flower(flowers, u)
-            v_b = get_flower(flowers, v)
-            u_b.next.append(v_b)
-            v_b.next.append(u_b)
+            b1 = get_flower(blue_flowers, u)
+            b2 = get_flower(blue_flowers, v)
+            b1.next.append(b2)
+            b2.next.append(b1)
 
             path2.remove(lca)  # remove lca from second list
             inner_flowers = path1 + path2
 
-            f = Flower(inner_flowers, lca.stem, eps, 'green')
+            f = Flower(inner_flowers, lca.stem, 0, 'green')
 
             # If LCA flower was root in tree we have no set new root.
             # Otherwise there is no need to change other pointers.
@@ -627,8 +690,8 @@ if __name__ == '__main__':
             t2 = opt['t2']
 
             u, v = min_edge
-            b1 = get_flower(flowers, u)
-            b2 = get_flower(flowers, v)
+            b1 = get_flower(blue_flowers, u)
+            b2 = get_flower(blue_flowers, v)
 
             b1.next.append(b2)
             b2.next.append(b1)
@@ -679,54 +742,6 @@ if __name__ == '__main__':
                         vertex_barbels[u_value] = 1
                         vertex_barbels[v_value] = 1
 
-            def in_alt_path(node, alt_path):
-                stack = copy.copy(node.flowers)
-                # blue flower
-                if (not stack):
-                    if (node in alt_path):
-                        return True
-                else:
-                    while(len(stack)):
-                        last = stack.pop()
-                        if (last.color == 'green'):
-                            stack += last.flowers
-                        if (last.color == 'blue' and last in alt_path):
-                            return True
-                return False
-
-            def split_tree_to_barbels(node, alt_path, level, matching,
-                                      prev, visited):
-                visited[node] = 1
-                if (level % 2 == 1):
-                    if (in_alt_path(node, alt_path)):
-                        matching[(node, prev)] = 1
-                        matching[(prev, node)] = 1
-                        # change stems
-                        b1, b2 = get_connection(node, prev)
-                        set_new_stems(node, b1)
-                        set_new_stems(prev, b2)
-                    else:
-                        b1, b2 = get_connection(node, prev)
-                        b1.next.remove(b2)
-                        b2.next.remove(b1)
-                elif (level % 2 == 0 and prev is not None):
-                    if (not in_alt_path(node, alt_path)):
-                        matching[(node, prev)] = 1
-                        matching[(prev, node)] = 1
-                        # change stems
-                        b1, b2 = get_connection(node, prev)
-                        set_new_stems(node, b1)
-                        set_new_stems(prev, b2)
-                    else:
-                        b1, b2 = get_connection(node, prev)
-                        b1.next.remove(b2)
-                        b2.next.remove(b1)
-                for n in node.get_next():
-                    if (n not in visited):
-                        split_tree_to_barbels(
-                            n, alt_path, level + 1, matching, node,
-                            visited)
-
             alt_path_d = {}  # store in dict to access quicker
             for ap in alt_path:
                 alt_path_d[ap] = 1
@@ -735,16 +750,18 @@ if __name__ == '__main__':
             b1.next.remove(b2)
             b2.next.remove(b1)
 
-            split_tree_to_barbels(t1.root, alt_path_d, 0, matching, None, {})
-            split_tree_to_barbels(t2.root, alt_path_d, 0, matching, None, {})
+            split_tree_to_barbels(t1.root, alt_path_d, 0,
+                                  barbels, None, {}, blocking_edges)
+            split_tree_to_barbels(t2.root, alt_path_d, 0,
+                                  barbels, None, {}, blocking_edges)
 
             # add connection again
             b1.next.append(b2)
             b2.next.append(b1)
 
             # create barbel from newly connected flowers
-            matching[(v1, v2)] = 1
-            matching[(v2, v1)] = 1
+            barbels[(v1, v2)] = 1
+            barbels[(v2, v1)] = 1
 
             # remove trees from hung_tress
             hung_trees.remove(t1)
@@ -754,34 +771,21 @@ if __name__ == '__main__':
             no_solution = True
             break
 
-        # print('vertex covered', len(vertex_barbels.keys()))
-
-        '''
-        for f in flowers:
-            print('Charge', f.charge)
-        print('Matching')
-        for m in matching:
-            if (isinstance(m[0], int)):
-                print(m)
-        print('L', blocking_edges)
-        print('Hung tress count', len(hung_trees))
-        '''
-        i += 1
+        # print('barbels', barbels)
+        # print('matching', matching)
+        # print('blocking edges', blocking_edges)
+        # print('hung tress count', len(hung_trees))
 
     if (no_solution):
-        print('NO')
+        print('No solution')
     else:
-        print('FINISHED')
         matching_cost = 0
         final_matching = []
+        print('Edges in matching')
         for m in matching:
-            if (isinstance(m[0], int)):
-                if (m[0] < m[1]):
-                    final_matching.append((m[0], m[1]))
-                    matching_cost += edges[(m[0], m[1])]
+            if (m[0] < m[1]):
+                final_matching.append((m[0], m[1]))
+                matching_cost += edges[(m[0], m[1])]
+                print(m[0], m[1])
+        print('Matching cost')
         print(matching_cost)
-
-        '''
-        for m in final_matching:
-            print(m[0], m[1])
-        '''

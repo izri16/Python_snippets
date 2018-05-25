@@ -3,10 +3,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 GRAPHS_DIR = 'graphs'
+FIGSIZE = (11, 6)
 
 NOT_USING = 'Nepoužívam'
 NOT_VISIT = 'Nenavštevujem'
-
+NONE_SERVICE = 'Žiadne'
 TIMESTAMP = 'timestamp'
 AGE = 'age'
 GENDER = 'gender'
@@ -14,9 +15,9 @@ WOMAN = 'Žena'
 MAN = 'Muž'
 
 RED = '#d31717'
-LESS_RED = '#d18052'
-YELLOW = '#eddf1c'
-LESS_BLUE = '#17d21d'
+BROWN = '#d18052'
+YELLOW = '#efd425'
+GREEN = '#17d21d'
 BLUE = '#1c99ed'
 GREY = '#ddedce'
 
@@ -69,9 +70,9 @@ ANSWERS = {
 
 COLOR_MAP = {
     '5': RED,
-    '4': LESS_RED,
+    '4': BROWN,
     '3': YELLOW,
-    '2': LESS_BLUE,
+    '2': GREEN,
     '1': BLUE,
 }
 COLORS = {}
@@ -145,7 +146,7 @@ def create_pie_plots(data1, data2, title1, title2, out, skip):
         t = str(task)
         colors = COLORS[t] if t in COLORS else None
         answers = ANSWERS_ORDER[t] if t in ANSWERS_ORDER else None
-        fig = plt.figure(figsize=(11, 6))
+        fig = plt.figure(figsize=FIGSIZE)
         fig.suptitle(col_map[t])
         plt.subplot(121)
         plt.title(title1)
@@ -169,56 +170,62 @@ def get_col_names(data):
     return (old_columns, col_map, new_col_names)
 
 
-if (not os.path.exists(GRAPHS_DIR)):
-    os.makedirs(GRAPHS_DIR)
+def plot_services(services):
+    splitted_services = []
+    min_freq = 5
+    for col in services:
+        splitted_services += filter(
+            lambda x: x != NONE_SERVICE,
+            map(str.strip, col.split(',')))
 
-data = pd.read_csv('inf-spol-data.csv', delimiter=',', header=0)
-old_columns, col_map, new_col_names = get_col_names(data)
-data.columns = new_col_names
+    merged = pd.Series(splitted_services).value_counts()
+    merged = merged[merged > min_freq]
+    to_plot_services = []
+    for i, m in merged.items():
+        to_plot_services += ([i] * m)
 
-# filter out those that dont really use it
-use_sk = data[data['6'] != NOT_VISIT]
+    plt.figure(figsize=FIGSIZE)
+    plt.title('Najpoužívanejšie služby')
+    plt.subplots_adjust(right=0.5)
+    plot_pie(pd.Series(to_plot_services), legend=True, loc=2, is_outside=True,
+             dont_explode=True)
+    plt.savefig('{}/services.png'.format(GRAPHS_DIR))
+    plt.close()
 
-# GENDER analysis
-woman = use_sk[use_sk['gender'] == WOMAN]
-men = use_sk[use_sk['gender'] == MAN]
-create_pie_plots(woman, men, 'Ženy', 'Muži', 'gender', [7])
 
-# AGE analysis
-age_data = use_sk['age']
-age_data = use_sk[pd.to_numeric(use_sk['age'], errors='coerce').notnull()]
-age_data = age_data.assign(age=lambda d: d['age'].astype(int))
-age_data = age_data[age_data['age'] < 100]
+if __name__ == '__main__':
+    if (not os.path.exists(GRAPHS_DIR)):
+        os.makedirs(GRAPHS_DIR)
 
-younger = age_data[age_data['age'] < 30]
-older = age_data[age_data['age'] >= 30]
-create_pie_plots(younger, older, 'Vek < 30', 'Vek >= 30', 'age', [7])
+    data = pd.read_csv('inf-spol-data.csv', delimiter=',', header=0)
+    old_columns, col_map, new_col_names = get_col_names(data)
+    data.columns = new_col_names
 
-print('Use slovensko.sk: {}'.format(use_sk.shape[0]))
-print('\nUse slovensko.sk (woman): {}'.format(woman.shape[0]))
-print('Use slovensko.sk (men): {}'.format(men.shape[0]))
-print('\nUse slovensko.sk (age < 30): {}'.format(younger.shape[0]))
-print('Use slovensko.sk (age > 30): {}'.format(older.shape[0]))
-print('\nNote that invalid ages were filtered out.')
+    # filter out those that dont really use it
+    use_sk = data[data['6'] != NOT_VISIT]
 
-# Services
-services = use_sk['7']
-splitted_services = []
-for col in services:
-    splitted_services += filter(
-        lambda x: x != 'Žiadne',
-        map(str.strip, col.split(',')))
+    # GENDER analysis
+    woman = use_sk[use_sk['gender'] == WOMAN]
+    men = use_sk[use_sk['gender'] == MAN]
+    create_pie_plots(woman, men, 'Ženy', 'Muži', 'gender', [7])
 
-merged = pd.Series(splitted_services).value_counts()
-merged = merged[merged > 5]
-to_plot_services = []
-for i, m in merged.items():
-    to_plot_services += ([i] * m)
+    # AGE analysis
+    age_data = use_sk['age']
+    age_data = use_sk[pd.to_numeric(use_sk['age'], errors='coerce').notnull()]
+    age_data = age_data.assign(age=lambda d: d['age'].astype(int))
+    age_data = age_data[age_data['age'] < 100]
 
-plt.figure(figsize=(11, 6))
-plt.title('Služby')
-plt.subplots_adjust(right=0.5)
-plot_pie(pd.Series(to_plot_services), legend=True, loc=2, is_outside=True,
-         dont_explode=True)
-plt.savefig('{}/services.png'.format(GRAPHS_DIR))
-plt.close()
+    younger = age_data[age_data['age'] < 30]
+    older = age_data[age_data['age'] >= 30]
+    create_pie_plots(younger, older, 'Vek < 30', 'Vek >= 30', 'age', [7])
+
+    # Services
+    plot_services(use_sk['7'])
+
+    # Stats
+    print('Use slovensko.sk: {}'.format(use_sk.shape[0]))
+    print('\nUse slovensko.sk (woman): {}'.format(woman.shape[0]))
+    print('Use slovensko.sk (men): {}'.format(men.shape[0]))
+    print('\nUse slovensko.sk (age < 30): {}'.format(younger.shape[0]))
+    print('Use slovensko.sk (age > 30): {}'.format(older.shape[0]))
+    print('\nNote that invalid ages were filtered out.')

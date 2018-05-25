@@ -1,15 +1,24 @@
+import os
 import pandas as pd
 import matplotlib.pyplot as plt
 
+GRAPHS_DIR = 'graphs'
+
 NOT_USING = 'Nepoužívam'
-NOT_INSTALL = 'Neinštaloval/a som'
-NOT_CREATE = 'Nevytvoril'
+NOT_VISIT = 'Nenavštevujem'
 
 TIMESTAMP = 'timestamp'
 AGE = 'age'
 GENDER = 'gender'
 WOMAN = 'Žena'
 MAN = 'Muž'
+
+RED = '#d31717'
+LESS_RED = '#d18052'
+YELLOW = '#eddf1c'
+LESS_BLUE = '#17d21d'
+BLUE = '#1c99ed'
+GREY = '#ddedce'
 
 ANSWERS = {
     '1': {
@@ -43,7 +52,7 @@ ANSWERS = {
     '8': {
         '1': 'Vždy fungujú',
         '3': 'Často fungujú',
-        '5': 'Často nefungujú',
+        '5': 'Často ne fungujú',
     },
     '9': {
         '1': 'Veľmi pozitívne',
@@ -57,16 +66,6 @@ ANSWERS = {
         '5': 'Nie',
     },
 }
-
-# LESS_RED = '#d152ce'
-# LESS_BLUE = '#52add1'
-
-RED = '#d31717'
-LESS_RED = '#d18052'
-YELLOW = '#eddf1c'
-LESS_BLUE = '#17d21d'
-BLUE = '#1c99ed'
-GREY = '#ddedce'
 
 COLOR_MAP = {
     '5': RED,
@@ -82,7 +81,7 @@ for question_id, answers in ANSWERS.items():
         col[answer] = COLOR_MAP[answer_id]
     COLORS[question_id] = col
 
-ANSWERS = {
+ANSWERS_ORDER = {
     '1': ['Prehľadné', 'Celkom prehľadné', 'Málo prehľadné', 'Neprehľadné'],
     '2': ['Prehľadné', 'Celkom prehľadné', 'Málo prehľadné', 'Neprehľadné'],
     '3': ['Veľmi užitočná služba dobre sa s ňou pracuje',
@@ -106,7 +105,8 @@ def make_autopct(values):
     return my_autopct
 
 
-def plot_pie(column, colors=None, answers=None, legend=False):
+def plot_pie(column, colors=None, answers=None, legend=False, loc=3,
+             is_outside=False, dont_explode=False):
     def my_autopct(pct):
         return '{p:.2f}%'.format(p=pct)
 
@@ -116,7 +116,7 @@ def plot_pie(column, colors=None, answers=None, legend=False):
         value_counts = value_counts[answers]
     keys = value_counts.keys()
     values = value_counts.values
-    explode = [0.03 for i in range(len(values))]
+    explode = [0.03 for i in range(len(values))] if not dont_explode else None
 
     custom_colors = [] if colors else None
     if (colors):
@@ -132,7 +132,29 @@ def plot_pie(column, colors=None, answers=None, legend=False):
         t.set_color('white')
 
     if (legend):
-        plt.legend(loc=3, labels=keys)
+        if (is_outside):
+            plt.legend(bbox_to_anchor=(1.0, 0.7), loc=loc, labels=keys)
+        else:
+            plt.legend(loc=loc, labels=keys)
+
+
+def create_pie_plots(data1, data2, title1, title2, out, skip):
+    for task in range(1, 11):
+        if (task in skip):
+            continue
+        t = str(task)
+        colors = COLORS[t] if t in COLORS else None
+        answers = ANSWERS_ORDER[t] if t in ANSWERS_ORDER else None
+        fig = plt.figure(figsize=(11, 6))
+        fig.suptitle(col_map[t])
+        plt.subplot(121)
+        plt.title(title1)
+        plot_pie(data1[t], colors=colors, answers=answers, legend=True)
+        plt.subplot(122)
+        plt.title(title2)
+        plot_pie(data2[t], colors=colors, answers=answers)
+        plt.savefig('{}/{}_{}.png'.format(GRAPHS_DIR, out, task))
+        plt.close()
 
 
 def get_col_names(data):
@@ -147,45 +169,56 @@ def get_col_names(data):
     return (old_columns, col_map, new_col_names)
 
 
+if (not os.path.exists(GRAPHS_DIR)):
+    os.makedirs(GRAPHS_DIR)
+
 data = pd.read_csv('inf-spol-data.csv', delimiter=',', header=0)
 old_columns, col_map, new_col_names = get_col_names(data)
 data.columns = new_col_names
 
-use_sk = data[data['1'] != NOT_USING]
+# filter out those that dont really use it
+use_sk = data[data['6'] != NOT_VISIT]
 
+# GENDER analysis
 woman = use_sk[use_sk['gender'] == WOMAN]
 men = use_sk[use_sk['gender'] == MAN]
-a = '9'
-
-fig = plt.figure(figsize=(11, 6))
-fig.suptitle(col_map[a])
-ax1 = plt.subplot(121)
-plt.title('Ženy')
-plot_pie(woman[a], colors=COLORS[a], answers=ANSWERS[a], legend=True)
-ax2 = plt.subplot(122)
-plt.title('Muži')
-plot_pie(men[a], colors=COLORS[a], answers=ANSWERS[a])
-plt.show()
+create_pie_plots(woman, men, 'Ženy', 'Muži', 'gender', [7])
 
 # AGE analysis
 age_data = use_sk['age']
 age_data = use_sk[pd.to_numeric(use_sk['age'], errors='coerce').notnull()]
-age_data['age'] = age_data['age'].astype(int)
+age_data = age_data.assign(age=lambda d: d['age'].astype(int))
 age_data = age_data[age_data['age'] < 100]
 
 younger = age_data[age_data['age'] < 30]
 older = age_data[age_data['age'] >= 30]
-print(younger.shape)
-print(older.shape)
+create_pie_plots(younger, older, 'Vek < 30', 'Vek >= 30', 'age', [7])
 
-fig = plt.figure(figsize=(11, 6))
-fig.suptitle(col_map['9'])
-ax1 = plt.subplot(121)
-plt.title('Vek < 30')
-plot_pie(younger[a], legend=True)
-ax2 = plt.subplot(122)
-plt.title('Vek >= 30')
-plot_pie(older['9'])
-plt.show()
+print('Use slovensko.sk: {}'.format(use_sk.shape[0]))
+print('\nUse slovensko.sk (woman): {}'.format(woman.shape[0]))
+print('Use slovensko.sk (men): {}'.format(men.shape[0]))
+print('\nUse slovensko.sk (age < 30): {}'.format(younger.shape[0]))
+print('Use slovensko.sk (age > 30): {}'.format(older.shape[0]))
+print('\nNote that invalid ages were filtered out.')
 
-print(use_sk.shape)
+# Services
+services = use_sk['7']
+splitted_services = []
+for col in services:
+    splitted_services += filter(
+        lambda x: x != 'Žiadne',
+        map(str.strip, col.split(',')))
+
+merged = pd.Series(splitted_services).value_counts()
+merged = merged[merged > 5]
+to_plot_services = []
+for i, m in merged.items():
+    to_plot_services += ([i] * m)
+
+plt.figure(figsize=(11, 6))
+plt.title('Služby')
+plt.subplots_adjust(right=0.5)
+plot_pie(pd.Series(to_plot_services), legend=True, loc=2, is_outside=True,
+         dont_explode=True)
+plt.savefig('{}/services.png'.format(GRAPHS_DIR))
+plt.close()

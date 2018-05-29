@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
+from scipy.stats import binom_test, ranksums
 
 GRAPHS_DIR = 'graphs'
 FIGSIZE = (11, 6)
@@ -192,6 +193,34 @@ def plot_services(services):
     plt.savefig('{}/services.png'.format(GRAPHS_DIR))
     plt.close()
 
+def question_ten_binom_test(subgroup):
+    vc = subgroup['10'].value_counts()
+    return binom_test(vc['Áno'], subgroup['10'].shape[0])
+
+def map_col_to_int(col, col_id): 
+    ints = []
+    for i in col:
+        diff = 0
+        for k, v in ANSWERS[col_id].items():
+            if (v == i):
+                diff = int(k)
+        ints.append(diff)
+    return ints
+
+def wilcoxon(col1, col2, col_id):
+    d1 = map_col_to_int(col1, col_id)
+    d2 = map_col_to_int(col2, col_id)
+    return ranksums(d1, d2).pvalue
+
+
+def wilcoxon_tests(col1, col2, label, questions):
+    print('Wilcoxon rank sum test for ... {}'.format(label))
+    for q in questions:
+        q_s = str(q)
+        p = wilcoxon(col1[q_s], col2[q_s], q_s)
+        if (p < 0.05):
+            print('{0} {1}: {2:.3}'.format(label, q, p))
+    print('\n')
 
 if __name__ == '__main__':
     if (not os.path.exists(GRAPHS_DIR)):
@@ -208,7 +237,14 @@ if __name__ == '__main__':
     woman = use_sk[use_sk['gender'] == WOMAN]
     men = use_sk[use_sk['gender'] == MAN]
     create_pie_plots(woman, men, 'Ženy', 'Muži', 'gender', [7])
-
+    
+    wilcoxon_tests(woman, men, 'Woman-Men', [1,2,3,4,5,8,9,10])
+    
+    print('Q-10 binomial Woman-Men test:')
+    print('Woman {0:.3}'.format(question_ten_binom_test(woman)))
+    print('Men {0:.3}'.format(question_ten_binom_test(men)))
+    print('###############################\n')
+    
     # AGE analysis
     age_data = use_sk['age']
     age_data = use_sk[pd.to_numeric(use_sk['age'], errors='coerce').notnull()]
@@ -218,6 +254,13 @@ if __name__ == '__main__':
     younger = age_data[age_data['age'] < 30]
     older = age_data[age_data['age'] >= 30]
     create_pie_plots(younger, older, 'Vek < 30', 'Vek >= 30', 'age', [7])
+    
+    wilcoxon_tests(younger, older, 'Younger-older', [1,2,3,4,5,8,9,10])
+    
+    print('Q-10 binomial Younger-Older test:')
+    print('Younger {0:.3}'.format(question_ten_binom_test(younger)))
+    print('Older {0:.3}'.format(question_ten_binom_test(older)))
+    print('###############################\n')
 
     # Services
     plot_services(use_sk['7'])
@@ -229,3 +272,4 @@ if __name__ == '__main__':
     print('\nUse slovensko.sk (age < 30): {}'.format(younger.shape[0]))
     print('Use slovensko.sk (age > 30): {}'.format(older.shape[0]))
     print('\nNote that invalid ages were filtered out.')
+
